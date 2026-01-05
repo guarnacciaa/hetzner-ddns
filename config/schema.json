@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Hetzner DDNS Configuration",
+  "description": "Configuration schema for Hetzner Cloud DNS dynamic DNS client",
+  "type": "object",
+  "required": ["global", "zones"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "description": "Global settings that apply to all zones",
+      "required": ["api_token", "check_interval_seconds"],
+      "properties": {
+        "api_token": {
+          "type": "string",
+          "description": "Hetzner Cloud API token (can use ENV:VAR_NAME syntax)"
+        },
+        "ip_check_url": {
+          "type": "string",
+          "description": "URL to check current public IP address",
+          "default": "https://ifconfig.me"
+        },
+        "check_interval_seconds": {
+          "type": "integer",
+          "minimum": 60,
+          "description": "How often to check for IP changes (in seconds)"
+        },
+        "ttl_default": {
+          "type": "integer",
+          "minimum": 60,
+          "description": "Default TTL for DNS records (in seconds)",
+          "default": 300
+        }
+      }
+    },
+    "zones": {
+      "type": "array",
+      "description": "List of DNS zones to manage",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "records"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Zone name (domain name, e.g., 'example.com')"
+          },
+          "records": {
+            "type": "array",
+            "description": "DNS records to manage in this zone",
+            "items": {
+              "type": "object",
+              "required": ["name", "type", "mode"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Record name (use '@' for zone apex)"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["A", "AAAA", "CNAME", "TXT", "MX", "NS", "SRV", "CAA"],
+                  "description": "DNS record type"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": ["dynamic-ip", "static"],
+                  "description": "dynamic-ip: use current public IP; static: use fixed value"
+                },
+                "value": {
+                  "type": "string",
+                  "description": "Record value (required for 'static' mode)"
+                },
+                "ttl": {
+                  "type": "integer",
+                  "minimum": 60,
+                  "description": "TTL for this record (overrides global default)"
+                }
+              },
+              "if": {
+                "properties": { "mode": { "const": "static" } }
+              },
+              "then": {
+                "required": ["value"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

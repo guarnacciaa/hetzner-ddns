@@ -1,0 +1,32 @@
+{
+  "global": {
+    "api_token": "ENV:HETZNER_API_TOKEN",
+    "ip_check_url": "https://ifconfig.me",
+    "check_interval_seconds": 300,
+    "ttl_default": 300
+  },
+  "zones": [
+    {
+      "name": "example.com",
+      "records": [
+        { "name": "@", "type": "A", "mode": "dynamic-ip" },
+        { "name": "www", "type": "A", "mode": "dynamic-ip" },
+        { "name": "mail", "type": "A", "mode": "dynamic-ip" },
+        {
+          "name": "smtp",
+          "type": "CNAME",
+          "mode": "static",
+          "value": "mail.example.com.",
+          "ttl": 3600
+        }
+      ]
+    },
+    {
+      "name": "another-domain.net",
+      "records": [
+        { "name": "@", "type": "A", "mode": "dynamic-ip" },
+        { "name": "vpn", "type": "A", "mode": "dynamic-ip" }
+      ]
+    }
+  ]
+}
