@@ -8,7 +8,7 @@
 
 If you have a home internet connection, your public IP address probably changes from time to time (this is called a "dynamic IP"). This tool automatically detects when your IP changes and updates your DNS records at Hetzner, so your domain always points to the right place.
 
-**In simple terms:** Your domain (like `mysite.com`) will always point to your home computer, even when your internet provider changes your IP address.
+**In simple terms:** Your domain (like `example.com`) will always point to your home computer, even when your internet provider changes your IP address.
 
 ---
 
@@ -493,7 +493,9 @@ This tool uses the [Hetzner Cloud API](https://docs.hetzner.cloud/) for DNS mana
 
 ## License
 
-MIT License - Feel free to use, modify, and distribute.
+This project is licensed under the **GNU General Public License v3.0** (GPL-3.0).
+
+You are free to use, modify, and distribute this software, but any derivative work must also be released under GPL-3.0. See the [LICENSE](LICENSE) file for details.
 
 ---
 
