@@ -1,6 +1,12 @@
 # Hetzner DDNS
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Docker](https://img.shields.io/badge/Docker-ready-blue?logo=docker)](https://www.docker.com/)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-green?logo=python)](https://www.python.org/)
+
 **Dynamic DNS client for Hetzner Cloud DNS** - Keep your DNS records automatically updated with your current public IP address.
+
+> **Perfect for:** Home servers, self-hosting, homelab, NAS, Raspberry Pi, VPN servers, game servers, and any setup with a dynamic IP address.
 
 ---
 
@@ -520,3 +526,9 @@ If you encounter issues:
    - Your configuration (remove sensitive data!)
    - The error message
    - Container logs
+
+---
+
+## Keywords
+
+*For searchability: hetzner ddns, hetzner dynamic dns, hetzner dyndns, hetzner cloud dns updater, hetzner dns api, dynamic dns docker, self-hosted ddns, homelab dns, raspberry pi ddns, home server dynamic ip, hetzner api python, ddns client linux, free dynamic dns alternative, no-ip alternative, duckdns alternative, cloudflare ddns alternative for hetzner*
