@@ -1,6 +1,6 @@
 import logging
 from hetzner_ddns.hetzner import HetznerCloudAPI
-from hetzner_ddns.txt_formatter import format_txt_value
+from hetzner_ddns.txt_formatter import format_txt_records
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +44,12 @@ def sync_all(cfg, ip):
             else:
                 value = r["value"]
 
-            # Format TXT records (auto-quote and split long values)
-            if record_type == "TXT":
-                value = format_txt_value(value)
-
             # Build the records array for the API
-            records = [{"value": value}]
+            if record_type == "TXT":
+                # TXT records need special formatting (quotes and splitting)
+                records = format_txt_records(value)
+            else:
+                records = [{"value": value}]
 
             key = (record_name, record_type)
 
@@ -58,9 +58,20 @@ def sync_all(cfg, ip):
                     # RRSet exists - check if update needed
                     current_records = existing[key].get("records", [])
                     current_values = [rec.get("value") for rec in current_records]
+                    new_values = [rec.get("value") for rec in records]
 
-                    if value not in current_values or len(current_values) != 1:
-                        # Value changed or multiple values exist - set to our single value
+                    # Compare values (handle single record case)
+                    needs_update = False
+                    if len(current_values) != len(new_values):
+                        needs_update = True
+                    elif len(new_values) == 1 and len(current_values) == 1:
+                        if current_values[0] != new_values[0]:
+                            needs_update = True
+                    else:
+                        if sorted(current_values) != sorted(new_values):
+                            needs_update = True
+
+                    if needs_update:
                         api.set_records(zone_name, record_name, record_type, records, ttl)
                     else:
                         logger.debug(f"Record {record_name} ({record_type}) unchanged")

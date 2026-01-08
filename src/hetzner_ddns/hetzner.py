@@ -68,12 +68,17 @@ class HetznerCloudAPI:
         if ttl is not None:
             payload["ttl"] = ttl
 
-        resp = self.s.post(
-            f"{BASE}/zones/{zone}/rrsets/{name}/{rtype}/actions/set_records",
-            json=payload
-        )
+        url = f"{BASE}/zones/{zone}/rrsets/{name}/{rtype}/actions/set_records"
+        logger.debug(f"API Request: POST {url}")
+        logger.debug(f"API Payload: {payload}")
+
+        resp = self.s.post(url, json=payload)
+        
+        if not resp.ok:
+            logger.error(f"API Error {resp.status_code}: {resp.text}")
+        
         resp.raise_for_status()
-        logger.info(f"Set records for {name}.{zone} ({rtype}): {[r['value'] for r in records]}")
+        logger.info(f"Set records for {name}.{zone} ({rtype}): {[r['value'][:50] + '...' if len(r['value']) > 50 else r['value'] for r in records]}")
         return resp.json().get("action")
 
     def create_rrset(self, zone, name, rtype, records, ttl=None):

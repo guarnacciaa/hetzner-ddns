@@ -14,108 +14,72 @@ logger = logging.getLogger(__name__)
 MAX_TXT_LENGTH = 255
 
 
-def format_txt_value(value: str) -> str:
+def format_txt_records(value: str) -> list:
     """
-    Format a TXT record value for DNS.
+    Format a TXT record value for the Hetzner Cloud API.
     
-    - Adds quotes around the value if not already quoted
-    - Splits values longer than 255 characters into multiple quoted strings
-    - Handles DKIM keys and other long TXT records automatically
+    Returns a list with a single record dictionary containing the properly
+    formatted TXT value. For values longer than 255 characters, the value
+    is split into multiple quoted strings within the same value field.
     
     Args:
         value: The raw TXT record value
         
     Returns:
-        Properly formatted TXT value with quotes and splits
+        List with one record dictionary: [{"value": "..."}]
         
     Examples:
-        >>> format_txt_value("v=spf1 mx ~all")
-        '"v=spf1 mx ~all"'
+        >>> format_txt_records("v=spf1 mx ~all")
+        [{"value": '"v=spf1 mx ~all"'}]
         
-        >>> format_txt_value("v=DKIM1; k=rsa; p=MIIB...")  # Long key
-        '"v=DKIM1; k=rsa; p=MII..." "...rest of key..."'
+        >>> format_txt_records("v=DKIM1; k=rsa; p=MIIB...")  # Long key > 255 chars
+        [{"value": '"v=DKIM1; k=rsa; p=MII..." "...rest..."'}]
     """
-    # If value is already properly formatted (starts and ends with quotes),
-    # check if it needs reformatting
-    if _is_already_formatted(value):
-        logger.debug("TXT value already formatted, keeping as-is")
-        return value
+    # Check if the value is already in the pre-formatted quoted format
+    # (for backwards compatibility with manually formatted values)
+    if _is_preformatted(value):
+        logger.debug("TXT value is pre-formatted, passing through as-is")
+        return [{"value": value}]
     
-    # Remove any existing quotes for processing
-    clean_value = _strip_quotes(value)
+    # Clean the value (remove any surrounding quotes if present)
+    clean_value = value.strip()
+    if clean_value.startswith('"') and clean_value.endswith('"') and '" "' not in clean_value:
+        # Single quoted string - remove quotes for processing
+        clean_value = clean_value[1:-1]
     
     # If the value fits in a single string, just quote it
     if len(clean_value) <= MAX_TXT_LENGTH:
-        return f'"{clean_value}"'
+        formatted = f'"{clean_value}"'
+        return [{"value": formatted}]
     
     # Split into chunks of MAX_TXT_LENGTH characters
     chunks = _split_into_chunks(clean_value, MAX_TXT_LENGTH)
     
-    # Quote each chunk and join with space
+    # Format as: "chunk1" "chunk2" "chunk3"
     formatted = " ".join(f'"{chunk}"' for chunk in chunks)
     
-    logger.debug(f"Split TXT record into {len(chunks)} chunks")
-    return formatted
-
-
-def _is_already_formatted(value: str) -> bool:
-    """
-    Check if a TXT value is already properly formatted.
+    logger.info(f"Split long TXT record into {len(chunks)} parts ({len(clean_value)} chars)")
     
-    A properly formatted value:
-    - Starts with a quote
-    - Ends with a quote
-    - Has balanced quotes (for multi-part values like "part1" "part2")
+    return [{"value": formatted}]
+
+
+def _is_preformatted(value: str) -> bool:
+    """
+    Check if a TXT value is already in the pre-formatted quoted format.
+    
+    Pre-formatted values look like: "part1" "part2"
+    These are typically manually formatted DKIM keys.
     """
     value = value.strip()
     
     if not value:
         return False
     
-    # Check if it starts and ends with quotes
-    if not (value.startswith('"') and value.endswith('"')):
-        return False
-    
-    # Count quotes - should be even for balanced quotes
-    quote_count = value.count('"')
-    if quote_count % 2 != 0:
-        return False
-    
-    # Check for the pattern "..." "..." (multi-part TXT)
-    # This is valid formatted output
-    if '" "' in value:
-        return True
-    
-    # Single quoted string
-    if quote_count == 2:
+    # Check for the multi-part quoted format: "..." "..."
+    if value.startswith('"') and value.endswith('"') and '" "' in value:
         return True
     
     return False
-
-
-def _strip_quotes(value: str) -> str:
-    """
-    Remove quotes from a TXT value for processing.
-    
-    Handles both single-part and multi-part quoted strings.
-    """
-    value = value.strip()
-    
-    # Handle multi-part values: "part1" "part2" -> part1part2
-    if '" "' in value:
-        # Split by '" "' and strip outer quotes
-        parts = value.split('" "')
-        # Clean up first and last parts
-        if parts:
-            parts[0] = parts[0].lstrip('"')
-            parts[-1] = parts[-1].rstrip('"')
-        return "".join(parts)
-    
-    # Handle single quoted string
-    if value.startswith('"') and value.endswith('"'):
-        return value[1:-1]
-    
-    return value
 
 
 def _split_into_chunks(value: str, chunk_size: int) -> list:
