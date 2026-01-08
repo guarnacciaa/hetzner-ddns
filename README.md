@@ -26,6 +26,7 @@ If you have a home internet connection, your public IP address probably changes 
 | **Multi-record support** | Update multiple DNS records per domain (e.g., `@`, `www`, `mail`) |
 | **Dynamic IP mode** | Automatically update records with your current public IP |
 | **Static mode** | Keep certain records fixed (useful for CNAME, MX, etc.) |
+| **Auto TXT formatting** | TXT records are automatically quoted and split (DKIM support) |
 | **Environment variables** | Keep sensitive data (API tokens) out of config files |
 | **Container-ready** | Works with Docker, Podman, and Kubernetes |
 | **Graceful shutdown** | Properly handles stop signals |
@@ -178,6 +179,195 @@ The record value is fixed and will not change. Useful for CNAME, MX, TXT records
 ```
 
 **Note:** For CNAME records pointing to external domains, include the trailing dot (e.g., `mail.google.com.`)
+
+---
+
+## DNS Record Types - Complete Examples
+
+This section shows how to configure each supported DNS record type.
+
+### A Record (IPv4 Address)
+
+Points a domain or subdomain to an IPv4 address.
+
+```json
+// Dynamic - uses your current public IP
+{ "name": "@", "type": "A", "mode": "dynamic-ip" }
+{ "name": "www", "type": "A", "mode": "dynamic-ip" }
+{ "name": "mail", "type": "A", "mode": "dynamic-ip" }
+
+// Static - uses a fixed IP address
+{ "name": "home", "type": "A", "mode": "static", "value": "192.168.1.100" }
+{ "name": "server", "type": "A", "mode": "static", "value": "203.0.113.50" }
+```
+
+### AAAA Record (IPv6 Address)
+
+Points a domain or subdomain to an IPv6 address.
+
+```json
+{ "name": "@", "type": "AAAA", "mode": "static", "value": "2001:db8::1" }
+{ "name": "www", "type": "AAAA", "mode": "static", "value": "2001:db8::2" }
+```
+
+### CNAME Record (Alias)
+
+Creates an alias from one name to another. The target must end with a dot.
+
+```json
+{ "name": "www", "type": "CNAME", "mode": "static", "value": "example.com." }
+{ "name": "ftp", "type": "CNAME", "mode": "static", "value": "www.example.com." }
+{ "name": "webmail", "type": "CNAME", "mode": "static", "value": "mail.example.com." }
+{ "name": "autoconfig", "type": "CNAME", "mode": "static", "value": "mail.example.com." }
+
+// Multiple subdomains pointing to the same target
+{ "name": "app1", "type": "CNAME", "mode": "static", "value": "main.example.com." }
+{ "name": "app2", "type": "CNAME", "mode": "static", "value": "main.example.com." }
+{ "name": "api", "type": "CNAME", "mode": "static", "value": "main.example.com." }
+```
+
+**Important:** CNAME values must end with a trailing dot (`.`) when pointing to fully qualified domain names.
+
+### MX Record (Mail Exchange)
+
+Specifies mail servers for the domain. Format: `priority hostname.`
+
+```json
+// Single mail server
+{ "name": "@", "type": "MX", "mode": "static", "value": "10 mail.example.com." }
+
+// Multiple mail servers with priorities (lower = higher priority)
+{ "name": "@", "type": "MX", "mode": "static", "value": "10 mail1.example.com." }
+{ "name": "@", "type": "MX", "mode": "static", "value": "20 mail2.example.com." }
+
+// Using external mail service
+{ "name": "@", "type": "MX", "mode": "static", "value": "10 aspmx.l.google.com." }
+```
+
+### TXT Record (Text)
+
+Stores text information. Commonly used for SPF, DKIM, DMARC, and domain verification.
+
+**Note:** You do NOT need to add quotes around the value - the tool adds them automatically. For long values (like DKIM keys), the tool automatically splits them into 255-character chunks.
+
+```json
+// SPF record - specifies authorized mail senders
+{ "name": "@", "type": "TXT", "mode": "static", "value": "v=spf1 mx ~all" }
+{ "name": "@", "type": "TXT", "mode": "static", "value": "v=spf1 include:_spf.google.com ~all" }
+
+// DMARC record - email authentication policy
+{ "name": "_dmarc", "type": "TXT", "mode": "static", "value": "v=DMARC1; p=none; rua=mailto:dmarc@example.com" }
+{ "name": "_dmarc", "type": "TXT", "mode": "static", "value": "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com" }
+
+// DKIM record - email signing key (automatically split if > 255 chars)
+{
+  "name": "default._domainkey",
+  "type": "TXT",
+  "mode": "static",
+  "ttl": 3600,
+  "value": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxis5gph/XQtyNO1234567890FyyJ5vsxDnUa1234567890NDAl7mKSGga2ltWYwMNS8MxMv+XOpNf4Za6b2T4E4CXcu5O0Bq9QZGgzqL31234567890ipMcncmDzoDOx0OwqLz/dcuYqt3Nip12345678904/M8kQnuumF1234567890dqKugj47deQIo+RogIpBvrCF9/UVXZ1234567890X9hbpr/Xl1PSBgn1234567890A9e/k8203YDED7sc+ACc8QGL8WExZN7Q8V+5xNPBUZaIx5E6nLxvBF6Z2hLkDKG2K9qclfovGO3z+a1ryPMDmbKZWcD8rYCOF1234567890"
+}
+
+// Domain verification (Google, Microsoft, etc.)
+{ "name": "@", "type": "TXT", "mode": "static", "value": "google-site-verification=abcdef123456" }
+{ "name": "@", "type": "TXT", "mode": "static", "value": "MS=ms12345678" }
+```
+
+### SRV Record (Service)
+
+Specifies location of services. Format: `priority weight port target.`
+
+```json
+// Autodiscover for email clients (Outlook)
+{ "name": "_autodiscover._tcp", "type": "SRV", "mode": "static", "value": "0 5 443 mail.example.com." }
+
+// IMAP and SMTP
+{ "name": "_imaps._tcp", "type": "SRV", "mode": "static", "value": "0 1 993 mail.example.com." }
+{ "name": "_submission._tcp", "type": "SRV", "mode": "static", "value": "0 1 587 mail.example.com." }
+
+// SIP/VoIP
+{ "name": "_sip._tcp", "type": "SRV", "mode": "static", "value": "10 60 5060 sip.example.com." }
+{ "name": "_sip._udp", "type": "SRV", "mode": "static", "value": "10 60 5060 sip.example.com." }
+
+// Minecraft server
+{ "name": "_minecraft._tcp", "type": "SRV", "mode": "static", "value": "0 5 25565 mc.example.com." }
+
+// XMPP/Jabber
+{ "name": "_xmpp-client._tcp", "type": "SRV", "mode": "static", "value": "5 0 5222 xmpp.example.com." }
+{ "name": "_xmpp-server._tcp", "type": "SRV", "mode": "static", "value": "5 0 5269 xmpp.example.com." }
+```
+
+**SRV Format Explained:** `priority weight port target`
+- **priority**: Lower values = higher priority (0-65535)
+- **weight**: Load balancing between same-priority servers (0-65535)
+- **port**: TCP/UDP port number
+- **target**: Hostname (must end with dot)
+
+### CAA Record (Certificate Authority Authorization)
+
+Controls which Certificate Authorities can issue SSL certificates for your domain.
+
+```json
+// Allow only Let's Encrypt
+{ "name": "@", "type": "CAA", "mode": "static", "value": "0 issue \"letsencrypt.org\"" }
+
+// Allow Let's Encrypt and report violations
+{ "name": "@", "type": "CAA", "mode": "static", "value": "0 issue \"letsencrypt.org\"" }
+{ "name": "@", "type": "CAA", "mode": "static", "value": "0 iodef \"mailto:security@example.com\"" }
+
+// Allow multiple CAs
+{ "name": "@", "type": "CAA", "mode": "static", "value": "0 issue \"letsencrypt.org\"" }
+{ "name": "@", "type": "CAA", "mode": "static", "value": "0 issue \"digicert.com\"" }
+
+// Wildcard certificates
+{ "name": "@", "type": "CAA", "mode": "static", "value": "0 issuewild \"letsencrypt.org\"" }
+```
+
+### NS Record (Nameserver)
+
+Delegates a subdomain to different nameservers.
+
+```json
+// Delegate subdomain to external nameservers
+{ "name": "subdomain", "type": "NS", "mode": "static", "value": "ns1.externaldns.com." }
+{ "name": "subdomain", "type": "NS", "mode": "static", "value": "ns2.externaldns.com." }
+```
+
+---
+
+## Complete Email Setup Example
+
+Here is a complete example for setting up email with SPF, DKIM, and DMARC:
+
+```json
+{
+  "global": {
+    "api_token": "ENV:HETZNER_API_TOKEN",
+    "check_interval_seconds": 300,
+    "ttl_default": 300
+  },1234567890
+  "zones": [
+    {
+      "name": "example.com",
+      "records": [
+        { "name": "mail", "type": "A", "mode": "dynamic-ip" },
+        { "name": "@", "type": "MX", "mode": "static", "value": "10 mail.example.com." },
+        { "name": "autoconfig", "type": "CNAME", "mode": "static", "value": "mail.example.com." },
+        { "name": "_autodiscover._tcp", "type": "SRV", "mode": "static", "value": "0 5 443 mail.example.com." },
+        { "name": "@", "type": "TXT", "mode": "static", "value": "v=spf1 mx ~all" },
+        { "name": "_dmarc", "type": "TXT", "mode": "static", "value": "v=DMARC1; p=none; rua=mailto:dmarc@example.com" },
+        {
+          "name": "default._domainkey",
+          "type": "TXT",
+          "mode": "static",
+          "ttl": 3600,
+          "value": "v=DKIM1; k=rsa; p=YOUR_DKIM_PUBLIC_KEY_HERE"
+        }
+      ]
+    }
+  ]
+}
+```
 
 ---
 
@@ -478,10 +668,18 @@ docker run -v ./config:/config:ro,Z hetzner-ddns
 
 1. **Startup**: Loads configuration, validates settings
 2. **IP Check**: Contacts the IP check service (default: ifconfig.me) to get your current public IP
-3. **Compare**: Checks if the IP has changed since last check
-4. **Update**: If IP changed, updates all configured DNS records via Hetzner Cloud API
-5. **Wait**: Sleeps for the configured interval
-6. **Repeat**: Goes back to step 2
+3. **Sync All Records**: On every cycle, syncs all configured records:
+   - **Dynamic records**: Updated with current public IP
+   - **Static records**: Ensured to have the configured value
+   - **New records**: Automatically created if missing
+   - **Unchanged records**: Skipped (no unnecessary API calls)
+4. **Wait**: Sleeps for the configured interval
+5. **Repeat**: Goes back to step 2
+
+**Key Features:**
+- Records are synced on every cycle, so new records added to the config are created automatically
+- The tool only makes API calls when values actually need to change
+- TXT records are automatically formatted with quotes and split if longer than 255 characters
 
 The application handles signals (SIGTERM, SIGINT) gracefully, completing any in-progress updates before shutting down.
 
