@@ -1,6 +1,7 @@
 import sys
 import time
 import signal
+import hashlib
 import logging
 from hetzner_ddns.config import load_config
 from hetzner_ddns.ip import get_public_ip
@@ -22,6 +23,15 @@ signal.signal(signal.SIGTERM, shutdown)
 signal.signal(signal.SIGINT, shutdown)
 
 
+def get_file_hash(path):
+    """Calculate MD5 hash of a file to detect changes."""
+    try:
+        with open(path, 'rb') as f:
+            return hashlib.md5(f.read()).hexdigest()
+    except Exception:
+        return None
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python -m hetzner_ddns.main <config_path>")
@@ -30,20 +40,35 @@ def main():
     setup_logging()
     logger.info("Hetzner DDNS starting...")
 
+    config_path = sys.argv[1]
+    
     try:
-        cfg = load_config(sys.argv[1])
+        cfg = load_config(config_path)
         logger.info(f"Loaded configuration with {len(cfg.zones)} zone(s)")
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
         sys.exit(1)
 
     last_ip = None
+    last_config_hash = get_file_hash(config_path)
     interval = cfg.global_cfg["check_interval_seconds"]
 
     logger.info(f"Starting sync loop (interval: {interval}s)")
 
     while running:
         try:
+            # Check if config file has changed
+            current_hash = get_file_hash(config_path)
+            if current_hash and current_hash != last_config_hash:
+                logger.info("Configuration file changed, reloading...")
+                try:
+                    cfg = load_config(config_path)
+                    last_config_hash = current_hash
+                    interval = cfg.global_cfg["check_interval_seconds"]
+                    logger.info(f"Configuration reloaded: {len(cfg.zones)} zone(s), interval: {interval}s")
+                except Exception as e:
+                    logger.error(f"Failed to reload config: {e} (keeping previous config)")
+
             ip = get_public_ip(cfg.global_cfg)
 
             if ip != last_ip:

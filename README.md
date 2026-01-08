@@ -31,6 +31,7 @@ If you have a home internet connection, your public IP address probably changes 
 | **Container-ready** | Works with Docker, Podman, and Kubernetes |
 | **Graceful shutdown** | Properly handles stop signals |
 | **Configurable interval** | Choose how often to check for IP changes |
+| **Hot config reload** | Changes to config.json are detected automatically |
 | **Detailed logging** | See exactly what's happening |
 
 ---
@@ -714,6 +715,7 @@ docker run -v ./config:/config:ro,Z hetzner-ddns
 - Records are synced on every cycle, so new records added to the config are created automatically
 - The tool only makes API calls when values actually need to change
 - TXT records are automatically formatted with quotes and split if longer than 255 characters
+- **Hot reload:** If you modify `config.json` while the container is running, changes are detected and applied automatically at the next cycle (no restart needed)
 
 The application handles signals (SIGTERM, SIGINT) gracefully, completing any in-progress updates before shutting down.
 
