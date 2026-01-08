@@ -51,10 +51,12 @@ def main():
                     logger.info(f"IP changed: {last_ip} -> {ip}")
                 else:
                     logger.info(f"Current IP: {ip}")
-
-                sync_all(cfg, ip)
                 last_ip = ip
-                logger.info("Sync completed successfully")
+
+            # Always sync all records on every cycle
+            # This ensures new records are created and static records are maintained
+            sync_all(cfg, ip)
+            logger.debug("Sync cycle completed")
 
         except Exception as e:
             logger.error(f"Error during sync cycle: {e}")

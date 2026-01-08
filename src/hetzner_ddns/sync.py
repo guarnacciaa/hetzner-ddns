@@ -1,5 +1,6 @@
 import logging
 from hetzner_ddns.hetzner import HetznerCloudAPI
+from hetzner_ddns.txt_formatter import format_txt_value
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ def sync_all(cfg, ip):
 
     for zone in cfg.zones:
         zone_name = zone["name"]
-        logger.info(f"Processing zone: {zone_name}")
+        logger.debug(f"Processing zone: {zone_name}")
 
         try:
             # Fetch existing RRSets for this zone
@@ -43,8 +44,11 @@ def sync_all(cfg, ip):
             else:
                 value = r["value"]
 
+            # Format TXT records (auto-quote and split long values)
+            if record_type == "TXT":
+                value = format_txt_value(value)
+
             # Build the records array for the API
-            # For now, we support single-value records
             records = [{"value": value}]
 
             key = (record_name, record_type)
@@ -62,6 +66,7 @@ def sync_all(cfg, ip):
                         logger.debug(f"Record {record_name} ({record_type}) unchanged")
                 else:
                     # RRSet doesn't exist - create it
+                    logger.info(f"Creating new record: {record_name}.{zone_name} ({record_type})")
                     api.create_rrset(zone_name, record_name, record_type, records, ttl)
 
             except Exception as e:
