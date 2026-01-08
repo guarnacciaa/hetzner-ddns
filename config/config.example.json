@@ -12,20 +12,25 @@
         { "name": "@", "type": "A", "mode": "dynamic-ip" },
         { "name": "www", "type": "A", "mode": "dynamic-ip" },
         { "name": "mail", "type": "A", "mode": "dynamic-ip" },
+        { "name": "home", "type": "A", "mode": "static", "value": "192.168.1.100" },
+
+        { "name": "ftp", "type": "CNAME", "mode": "static", "value": "www.example.com." },
+        { "name": "webmail", "type": "CNAME", "mode": "static", "value": "mail.example.com." },
+        { "name": "autoconfig", "type": "CNAME", "mode": "static", "value": "mail.example.com." },
+
+        { "name": "@", "type": "MX", "mode": "static", "value": "10 mail.example.com." },
+
+        { "name": "_autodiscover._tcp", "type": "SRV", "mode": "static", "value": "0 5 443 mail.example.com." },
+
+        { "name": "@", "type": "TXT", "mode": "static", "value": "v=spf1 mx ~all" },
+        { "name": "_dmarc", "type": "TXT", "mode": "static", "value": "v=DMARC1; p=none; rua=mailto:dmarc-reports@example.com" },
         {
-          "name": "smtp",
-          "type": "CNAME",
+          "name": "default._domainkey",
+          "type": "TXT",
           "mode": "static",
-          "value": "mail.example.com.",
-          "ttl": 3600
+          "ttl": 3600,
+          "value": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxis5gph/XQtyNOzegm52Y+znFyyJ5vsxDnUa9ZSrhUGmpiNDAl7mKSGga2ltWYwMNS8MxMv+XOpNf4Za6b2T4E4CXcu5O0Bq9QZGgzqL3Pmp5trw9EHipMcncmDzoDOx0OwqLz/dcuYqt3NipFevZCFa/3I4/M8kQnuumF0bofVj61OqKugj47deQIo+RogIpBvrCF9/UVXZfv8iE7fwW1X9hbpr/Xl1PSBgneLAVkGnuK4A9e/k8203YDED7sc+ACc8QGL8WExZN7Q8V+5xNPBUZaIx5E6nLxvBF6Z2hLkDKG2K9qclfovGO3z+a1ryPMDmbKZWcD8rYCOF25DK4wIDAQAB"
         }
-      ]
-    },
-    {
-      "name": "another-domain.net",
-      "records": [
-        { "name": "@", "type": "A", "mode": "dynamic-ip" },
-        { "name": "vpn", "type": "A", "mode": "dynamic-ip" }
       ]
     }
   ]
