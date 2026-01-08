@@ -56,7 +56,7 @@ def main():
             # Always sync all records on every cycle
             # This ensures new records are created and static records are maintained
             sync_all(cfg, ip)
-            logger.debug("Sync cycle completed")
+            logger.info("Sync cycle completed, sleeping for %d seconds", interval)
 
         except Exception as e:
             logger.error(f"Error during sync cycle: {e}")
