@@ -48,6 +48,7 @@ def sync_all(cfg, ip):
             if record_type == "TXT":
                 # TXT records need special formatting (quotes and splitting)
                 records = format_txt_records(value)
+                logger.info(f"TXT record formatted: {records[0]['value'][:80]}...")
             else:
                 records = [{"value": value}]
 

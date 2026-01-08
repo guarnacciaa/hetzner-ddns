@@ -69,15 +69,14 @@ class HetznerCloudAPI:
             payload["ttl"] = ttl
 
         url = f"{BASE}/zones/{zone}/rrsets/{name}/{rtype}/actions/set_records"
-        logger.debug(f"API Request: POST {url}")
-        logger.debug(f"API Payload: {payload}")
+        logger.info(f"API Request: POST {url}")
+        logger.info(f"API Payload records: {[r['value'][:60] + '...' if len(r['value']) > 60 else r['value'] for r in records]}")
 
         resp = self.s.post(url, json=payload)
         
         if not resp.ok:
-            logger.error(f"API Error {resp.status_code}: {resp.text}")
-        
-        resp.raise_for_status()
+            logger.error(f"API Response {resp.status_code}: {resp.text}")
+            raise Exception(f"API Error {resp.status_code}: {resp.text}")
         logger.info(f"Set records for {name}.{zone} ({rtype}): {[r['value'][:50] + '...' if len(r['value']) > 50 else r['value'] for r in records]}")
         return resp.json().get("action")
 
