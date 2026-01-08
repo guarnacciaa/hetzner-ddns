@@ -60,6 +60,13 @@ If you have a home internet connection, your public IP address probably changes 
 4. Click **Generate API Token**
 5. Give it a name (e.g., "DDNS") and select **Read and Write** permissions
 6. **Copy the token** - you will not be able to see it again!
+7. **Save the token** as an environment variable (you will need it later):
+
+```bash
+export HETZNER_API_TOKEN="your-token-here"
+```
+
+**Tip:** Add this line to your `~/.bashrc` or `~/.zshrc` to make it permanent.
 
 ### Step 2: Make sure your domain is in Hetzner DNS
 
@@ -79,19 +86,35 @@ Edit `config/config.json` with your domains and records (see Configuration secti
 ### Step 4: Run with Docker
 
 ```bash
+# Make sure you exported the token (from Step 1)
+echo $HETZNER_API_TOKEN  # Should print your token
+
 # Build the container
 docker build -t hetzner-ddns .
 
-# Run it
+# Run it (uses the exported environment variable)
 docker run -d \
   --name hetzner-ddns \
   --restart unless-stopped \
-  -e HETZNER_API_TOKEN="your-api-token-here" \
+  -e HETZNER_API_TOKEN="$HETZNER_API_TOKEN" \
   -v $(pwd)/config:/config:ro \
   hetzner-ddns
+
+# Check the logs to make sure it's working
+docker logs -f hetzner-ddns
 ```
 
 That is it! The container will now check your IP every 5 minutes and update your DNS records when it changes.
+
+**Expected output:**
+```
+[INFO] Hetzner DDNS starting...
+[INFO] Configuration loaded from /config/config.json
+[INFO] Loaded configuration with 1 zone(s)
+[INFO] Starting sync loop (interval: 300s)
+[INFO] Current IP: x.x.x.x
+[INFO] Sync cycle completed, sleeping for 300 seconds
+```
 
 ---
 
@@ -345,7 +368,7 @@ Here is a complete example for setting up email with SPF, DKIM, and DMARC:
     "api_token": "ENV:HETZNER_API_TOKEN",
     "check_interval_seconds": 300,
     "ttl_default": 300
-  },1234567890
+  },
   "zones": [
     {
       "name": "example.com",
@@ -417,10 +440,9 @@ docker rm hetzner-ddns
 
 ### With Docker Compose
 
-Create a `docker-compose.yml` file:
+1. Create a `docker-compose.yml` file:
 
 ```yaml
-version: "3.8"
 services:
   hetzner-ddns:
     build: .
@@ -432,17 +454,29 @@ services:
       - ./config:/config:ro
 ```
 
-Then run:
+2. Create a `.env` file in the same directory (to store your token):
 
 ```bash
-# Start
-docker-compose up -d
+# .env file
+HETZNER_API_TOKEN=your-token-here
+```
+
+**Important:** The `.env` file is already in `.gitignore` so it won't be committed to git.
+
+3. Run:
+
+```bash
+# Build and start
+docker-compose up -d --build
 
 # View logs
 docker-compose logs -f
 
 # Stop
 docker-compose down
+
+# Rebuild after code changes
+docker-compose down && docker-compose build --no-cache && docker-compose up -d
 ```
 
 ### With Podman
