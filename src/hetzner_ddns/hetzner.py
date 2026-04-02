@@ -23,9 +23,27 @@ class HetznerCloudAPI:
         Returns:
             List of RRSet objects
         """
-        resp = self.s.get(f"{BASE}/zones/{zone}/rrsets")
-        resp.raise_for_status()
-        return resp.json().get("rrsets", [])
+        per_page = 100
+        page = 1
+        all_rrsets = []
+        while True:
+            resp = self.s.get(
+                f"{BASE}/zones/{zone}/rrsets",
+                params={"page": page, "per_page": per_page},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            batch = data.get("rrsets", [])
+            all_rrsets.extend(batch)
+            pagination = (data.get("meta") or {}).get("pagination") or {}
+            next_page = pagination.get("next_page")
+            if next_page is not None:
+                page = next_page
+                continue
+            if len(batch) < per_page:
+                break
+            page += 1
+        return all_rrsets
 
     def get_rrset(self, zone, name, rtype):
         """
@@ -100,6 +118,16 @@ class HetznerCloudAPI:
             payload["ttl"] = ttl
 
         resp = self.s.post(f"{BASE}/zones/{zone}/rrsets", json=payload)
+        if resp.status_code == 409:
+            logger.info(
+                "RRSet already exists (%s %s), applying set_records instead",
+                name,
+                rtype,
+            )
+            self.set_records(zone, name, rtype, records, ttl)
+            return None
+        if not resp.ok:
+            logger.error("API Response %s: %s", resp.status_code, resp.text)
         resp.raise_for_status()
         logger.info(f"Created RRSet: {name}.{zone} ({rtype})")
         return resp.json().get("rrset")

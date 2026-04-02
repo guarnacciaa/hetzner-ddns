@@ -58,7 +58,7 @@ def format_txt_records(value: str) -> list:
     # Format as: "chunk1" "chunk2" "chunk3"
     formatted = " ".join(f'"{chunk}"' for chunk in chunks)
     
-    logger.info(f"Split long TXT record into {len(chunks)} parts ({len(clean_value)} chars)")
+    logger.debug(f"Split long TXT record into {len(chunks)} parts ({len(clean_value)} chars)")
     
     return [{"value": formatted}]
 

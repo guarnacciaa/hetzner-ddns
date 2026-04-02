@@ -5,6 +5,24 @@ from hetzner_ddns.txt_formatter import format_txt_records
 logger = logging.getLogger(__name__)
 
 
+def normalize_record_name(name: str, zone_name: str) -> str:
+    """
+    Map RRSet names from the API to the same form used in config (@ or relative labels).
+
+    Hetzner may return the apex as the zone name or as '@', and subdomains as FQDNs.
+    """
+    if not name:
+        return name
+    name = name.rstrip(".")
+    z = zone_name.rstrip(".")
+    if name == "@" or name == z:
+        return "@"
+    suffix = f".{z}"
+    if name.endswith(suffix):
+        return name[: -len(suffix)]
+    return name
+
+
 def sync_all(cfg, ip):
     """
     Synchronize all DNS records across all configured zones.
@@ -29,7 +47,8 @@ def sync_all(cfg, ip):
         # Build lookup map: (name, type) -> rrset
         existing = {}
         for rrset in existing_rrsets:
-            key = (rrset["name"], rrset["type"])
+            norm_name = normalize_record_name(rrset["name"], zone_name)
+            key = (norm_name, rrset["type"])
             existing[key] = rrset
 
         # Process each configured record
@@ -48,7 +67,7 @@ def sync_all(cfg, ip):
             if record_type == "TXT":
                 # TXT records need special formatting (quotes and splitting)
                 records = format_txt_records(value)
-                logger.info(f"TXT record formatted: {records[0]['value'][:80]}...")
+                logger.debug(f"TXT record formatted: {records[0]['value'][:80]}...")
             else:
                 records = [{"value": value}]
 
