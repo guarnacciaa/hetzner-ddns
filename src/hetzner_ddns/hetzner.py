@@ -1,8 +1,15 @@
 import logging
+from urllib.parse import quote
+
 import requests
 
 BASE = "https://api.hetzner.cloud/v1"
 logger = logging.getLogger(__name__)
+
+
+def _rrset_path_name(name: str) -> str:
+    """Percent-encode RRSet name for URL path (e.g. @ -> %40)."""
+    return quote(str(name), safe="")
 
 
 class HetznerCloudAPI:
@@ -58,7 +65,9 @@ class HetznerCloudAPI:
             RRSet object or None if not found
         """
         try:
-            resp = self.s.get(f"{BASE}/zones/{zone}/rrsets/{name}/{rtype}")
+            resp = self.s.get(
+                f"{BASE}/zones/{zone}/rrsets/{_rrset_path_name(name)}/{rtype}"
+            )
             if resp.status_code == 404:
                 return None
             resp.raise_for_status()
@@ -86,7 +95,7 @@ class HetznerCloudAPI:
         if ttl is not None:
             payload["ttl"] = ttl
 
-        url = f"{BASE}/zones/{zone}/rrsets/{name}/{rtype}/actions/set_records"
+        url = f"{BASE}/zones/{zone}/rrsets/{_rrset_path_name(name)}/{rtype}/actions/set_records"
         logger.info(f"API Request: POST {url}")
         logger.info(f"API Payload records: {[r['value'][:60] + '...' if len(r['value']) > 60 else r['value'] for r in records]}")
 
@@ -127,7 +136,13 @@ class HetznerCloudAPI:
             self.set_records(zone, name, rtype, records, ttl)
             return None
         if not resp.ok:
-            logger.error("API Response %s: %s", resp.status_code, resp.text)
+            logger.error(
+                "create_rrset failed %s %s/%s: %s",
+                resp.status_code,
+                name,
+                rtype,
+                resp.text,
+            )
         resp.raise_for_status()
         logger.info(f"Created RRSet: {name}.{zone} ({rtype})")
         return resp.json().get("rrset")
@@ -149,7 +164,10 @@ class HetznerCloudAPI:
         if ttl is not None:
             payload["ttl"] = ttl
 
-        resp = self.s.put(f"{BASE}/zones/{zone}/rrsets/{name}/{rtype}", json=payload)
+        resp = self.s.put(
+            f"{BASE}/zones/{zone}/rrsets/{_rrset_path_name(name)}/{rtype}",
+            json=payload,
+        )
         resp.raise_for_status()
         logger.info(f"Updated RRSet: {name}.{zone} ({rtype})")
         return resp.json().get("rrset")
@@ -163,6 +181,8 @@ class HetznerCloudAPI:
             name: Record name
             rtype: Record type
         """
-        resp = self.s.delete(f"{BASE}/zones/{zone}/rrsets/{name}/{rtype}")
+        resp = self.s.delete(
+            f"{BASE}/zones/{zone}/rrsets/{_rrset_path_name(name)}/{rtype}"
+        )
         resp.raise_for_status()
         logger.info(f"Deleted RRSet: {name}.{zone} ({rtype})")

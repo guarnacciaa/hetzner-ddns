@@ -5,6 +5,11 @@ from hetzner_ddns.txt_formatter import format_txt_records
 logger = logging.getLogger(__name__)
 
 
+def normalize_record_type(rtype: str) -> str:
+    """DNS types from the API may not match config casing (e.g. txt vs TXT)."""
+    return (rtype or "").upper()
+
+
 def normalize_record_name(name: str, zone_name: str) -> str:
     """
     Map RRSet names from the API to the same form used in config (@ or relative labels).
@@ -47,14 +52,14 @@ def sync_all(cfg, ip):
         # Build lookup map: (name, type) -> rrset
         existing = {}
         for rrset in existing_rrsets:
-            norm_name = normalize_record_name(rrset["name"], zone_name)
-            key = (norm_name, rrset["type"])
+            norm_name = normalize_record_name(rrset.get("name") or "", zone_name)
+            key = (norm_name, normalize_record_type(rrset.get("type")))
             existing[key] = rrset
 
         # Process each configured record
         for r in zone["records"]:
             record_name = r["name"]
-            record_type = r["type"]
+            record_type = normalize_record_type(r["type"])
             ttl = r.get("ttl", cfg.global_cfg.get("ttl_default", 300))
 
             # Determine the value based on mode
