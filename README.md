@@ -33,6 +33,13 @@ If you have a home internet connection, your public IP address probably changes 
 | **Configurable interval** | Choose how often to check for IP changes |
 | **Hot config reload** | Changes to config.json are detected automatically |
 | **Detailed logging** | See exactly what's happening |
+| **Full zone sync** | Lists all RR sets with pagination so large zones are not truncated |
+| **Hetzner name matching** | Normalizes API names (apex as zone name vs `@`, subdomains as FQDN vs short labels) so existing records are detected correctly |
+| **Record type normalization** | Treats DNS types case-insensitively when matching API data to your config |
+| **Create conflict recovery** | If creating an RR set returns HTTP 409, the client retries with `set_records` instead of failing |
+| **CNAME exclusivity guard** | Before creating a record, detects a CNAME clashing with another type at the same name (or the reverse) and logs a clear skip message instead of a generic API error |
+| **URL-safe API paths** | Encodes record names in API paths (e.g. apex `@`) as required by the Hetzner API |
+| **TXT logging at DEBUG** | TXT formatting and long-TXT split messages are logged only at debug level to keep default output readable |
 
 ---
 
@@ -251,6 +258,8 @@ Creates an alias from one name to another. The target must end with a dot.
 ```
 
 **Important:** CNAME values must end with a trailing dot (`.`) when pointing to fully qualified domain names.
+
+**CNAME vs other records:** A DNS name cannot have a **CNAME** together with an **A**, **AAAA**, **TXT**, or most other types. If you switch a hostname from `A` to `CNAME` in the config, remove the old **A** (or other) RR set in the Hetzner DNS console first. Otherwise the API returns a validation error. The client detects this situation and logs which existing type blocks the change.
 
 ### MX Record (Mail Exchange)
 
@@ -689,6 +698,18 @@ Common issues:
 - The record name/type does not match exactly
 - API rate limiting (wait a few minutes)
 
+### HTTP 409 when creating records
+
+Older builds could hit **409 Conflict** when the RR set already existed but the client did not recognize it (e.g. different name shape from the API, or only the first page of RR sets was loaded). Current versions paginate through all RR sets, normalize apex and subdomain names, normalize record types, and fall back to `set_records` if create returns 409. **Rebuild your image** after upgrading so the container runs the latest code.
+
+### HTTP 422: CNAME conflicts with A (or similar)
+
+Example message from the API: `(name, CNAME) conflicts with (name, A)`. You must have only one kind of data at that hostname: delete the conflicting RR set in the Hetzner console (often the old **A** record) or change your config. The client may skip the create and log a short explanation instead of repeating the API error every cycle.
+
+### Verbose TXT / DKIM logging
+
+Messages such as `TXT record formatted` and `Split long TXT record` are emitted at **DEBUG**. The bundled `setup_logging()` in `src/hetzner_ddns/logging.py` uses **INFO** by default, so they do not appear in normal container output. To see them when running from source, raise the level there (for example `level=logging.DEBUG`) or wire logging to your own configuration.
+
 ### Permission denied on config file
 
 On SELinux systems (Fedora, RHEL), add `:Z` to the volume mount:
@@ -704,9 +725,11 @@ docker run -v ./config:/config:ro,Z hetzner-ddns
 1. **Startup**: Loads configuration, validates settings
 2. **IP Check**: Contacts the IP check service (default: ifconfig.me) to get your current public IP
 3. **Sync All Records**: On every cycle, syncs all configured records:
+   - **Fetch**: Loads every RR set in the zone (paginated requests), then matches them to your config using normalized owner names (`@` vs zone apex, short names vs FQDN) and normalized types (case-insensitive)
    - **Dynamic records**: Updated with current public IP
    - **Static records**: Ensured to have the configured value
-   - **New records**: Automatically created if missing
+   - **New records**: Created when missing; if the API reports the RR set already exists (409), the client applies `set_records` instead
+   - **CNAME rules**: If a new record would violate CNAME exclusivity (e.g. CNAME while an **A** exists on the same name), the sync skips that entry and logs guidance instead of calling create
    - **Unchanged records**: Skipped (no unnecessary API calls)
 4. **Wait**: Sleeps for the configured interval
 5. **Repeat**: Goes back to step 2
@@ -714,7 +737,7 @@ docker run -v ./config:/config:ro,Z hetzner-ddns
 **Key Features:**
 - Records are synced on every cycle, so new records added to the config are created automatically
 - The tool only makes API calls when values actually need to change
-- TXT records are automatically formatted with quotes and split if longer than 255 characters
+- TXT records are automatically formatted with quotes and split if longer than 255 characters (detailed TXT logs only at DEBUG)
 - **Hot reload:** If you modify `config.json` while the container is running, changes are detected and applied automatically at the next cycle (no restart needed)
 
 The application handles signals (SIGTERM, SIGINT) gracefully, completing any in-progress updates before shutting down.
@@ -725,7 +748,7 @@ The application handles signals (SIGTERM, SIGINT) gracefully, completing any in-
 
 This tool uses the [Hetzner Cloud API](https://docs.hetzner.cloud/) for DNS management. Specifically:
 
-- `GET /zones/{zone}/rrsets` - List all record sets
+- `GET /zones/{zone}/rrsets` - List record sets (the client follows pagination until all pages are read)
 - `POST /zones/{zone}/rrsets` - Create new record set
 - `POST /zones/{zone}/rrsets/{name}/{type}/actions/set_records` - Update records
 

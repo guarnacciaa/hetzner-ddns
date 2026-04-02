@@ -28,6 +28,26 @@ def normalize_record_name(name: str, zone_name: str) -> str:
     return name
 
 
+def cname_label_conflict_type(existing_rrsets, zone_name, record_name, record_type):
+    """
+    If creating this RRSet would violate CNAME exclusivity, return the existing type that blocks it.
+
+    At one DNS owner name, a CNAME cannot coexist with any other RR type.
+    """
+    norm_target = normalize_record_name(record_name, zone_name)
+    want = normalize_record_type(record_type)
+    for rrset in existing_rrsets:
+        n = normalize_record_name(rrset.get("name") or "", zone_name)
+        if n != norm_target:
+            continue
+        has = normalize_record_type(rrset.get("type"))
+        if has == want:
+            continue
+        if want == "CNAME" or has == "CNAME":
+            return has
+    return None
+
+
 def sync_all(cfg, ip):
     """
     Synchronize all DNS records across all configured zones.
@@ -101,9 +121,26 @@ def sync_all(cfg, ip):
                     else:
                         logger.debug(f"Record {record_name} ({record_type}) unchanged")
                 else:
-                    # RRSet doesn't exist - create it
-                    logger.info(f"Creating new record: {record_name}.{zone_name} ({record_type})")
-                    api.create_rrset(zone_name, record_name, record_type, records, ttl)
+                    # RRSet doesn't exist - create it (unless CNAME vs other type at same label)
+                    blocking = cname_label_conflict_type(
+                        existing_rrsets, zone_name, record_name, record_type
+                    )
+                    if blocking:
+                        logger.error(
+                            "Skipping %s (%s): conflicts with existing %s at the same name "
+                            "(delete the %s RRSet in Hetzner DNS or change this config entry).",
+                            record_name,
+                            record_type,
+                            blocking,
+                            blocking,
+                        )
+                    else:
+                        logger.info(
+                            f"Creating new record: {record_name}.{zone_name} ({record_type})"
+                        )
+                        api.create_rrset(
+                            zone_name, record_name, record_type, records, ttl
+                        )
 
             except Exception as e:
                 logger.error(f"Failed to sync record {record_name} ({record_type}): {e}")
