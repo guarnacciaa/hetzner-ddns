@@ -76,25 +76,35 @@ def sync_all(cfg, ip):
             key = (norm_name, normalize_record_type(rrset.get("type")))
             existing[key] = rrset
 
-        # Process each configured record
+        # Group configured records by (name, type): Hetzner stores every value
+        # for a given name/type pair (multiple TXT strings, multiple MX/CAA
+        # entries, etc.) as a single RRSet, so entries sharing a key must be
+        # merged into one combined RRSet instead of being synced independently
+        # (which would make each entry overwrite the others).
+        groups = {}
         for r in zone["records"]:
-            record_name = r["name"]
-            record_type = normalize_record_type(r["type"])
-            ttl = r.get("ttl", cfg.global_cfg.get("ttl_default", 300))
+            group_key = (r["name"], normalize_record_type(r["type"]))
+            groups.setdefault(group_key, []).append(r)
 
-            # Determine the value based on mode
-            if r["mode"] == "dynamic-ip":
-                value = ip
-            else:
-                value = r["value"]
+        for (record_name, record_type), group_records in groups.items():
+            ttl = cfg.global_cfg.get("ttl_default", 300)
+            for r in group_records:
+                if r.get("ttl") is not None:
+                    ttl = r["ttl"]
+                    break
 
-            # Build the records array for the API
-            if record_type == "TXT":
-                # TXT records need special formatting (quotes and splitting)
-                records = format_txt_records(value)
-                logger.debug(f"TXT record formatted: {records[0]['value'][:80]}...")
-            else:
-                records = [{"value": value}]
+            # Build the records array for the API, combining every entry
+            # configured under this (name, type) into one RRSet.
+            records = []
+            for r in group_records:
+                value = ip if r["mode"] == "dynamic-ip" else r["value"]
+                if record_type == "TXT":
+                    # TXT records need special formatting (quotes and splitting)
+                    formatted = format_txt_records(value)
+                    records.extend(formatted)
+                    logger.debug(f"TXT record formatted: {formatted[0]['value'][:80]}...")
+                else:
+                    records.append({"value": value})
 
             key = (record_name, record_type)
 
