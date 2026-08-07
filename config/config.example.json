@@ -3,7 +3,9 @@
     "api_token": "ENV:HETZNER_API_TOKEN",
     "ip_check_url": "https://ifconfig.me",
     "check_interval_seconds": 300,
-    "ttl_default": 300
+    "ttl_default": 300,
+    "sync_mode": "additive",
+    "strict_confirm_delete": false
   },
   "zones": [
     {
@@ -31,6 +33,15 @@
           "ttl": 3600,
           "value": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxis5gph/XQtyNOzegm52Y+znFyyJ5vsxDnUa9ZSrhUGmpiNDAl7mKSGga2ltWYwMNS8MxMv+XOpNf4Za6b2T4E4CXcu5O0Bq9QZGgzqL3Pmp5trw9EHipMcncmDzoDOx0OwqLz/dcuYqt3NipFevZCFa/3I4/M8kQnuumF0bofVj61OqKugj47deQIo+RogIpBvrCF9/UVXZfv8iE7fwW1X9hbpr/Xl1PSBgneLAVkGnuK4A9e/k8203YDED7sc+ACc8QGL8WExZN7Q8V+5xNPBUZaIx5E6nLxvBF6Z2hLkDKG2K9qclfovGO3z+a1ryPMDmbKZWcD8rYCOF25DK4wIDAQAB"
         }
+      ]
+    },
+    {
+      "name": "another-domain.net",
+      "sync_mode": "strict",
+      "strict_confirm_delete": false,
+      "records": [
+        { "name": "@", "type": "A", "mode": "dynamic-ip" },
+        { "name": "www", "type": "A", "mode": "dynamic-ip" }
       ]
     }
   ]

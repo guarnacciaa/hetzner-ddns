@@ -40,6 +40,7 @@ If you have a home internet connection, your public IP address probably changes 
 | **CNAME exclusivity guard** | Before creating a record, detects a CNAME clashing with another type at the same name (or the reverse) and logs a clear skip message instead of a generic API error |
 | **URL-safe API paths** | Encodes record names in API paths (e.g. apex `@`) as required by the Hetzner API |
 | **TXT logging at DEBUG** | TXT formatting and long-TXT split messages are logged only at debug level to keep default output readable |
+| **Additive or strict sync mode** | Choose whether the tool only manages the records in your config (leaving anything else you add manually in the Hetzner console untouched) or actively removes records that drift out of sync with your config |
 
 ---
 
@@ -173,6 +174,8 @@ The configuration file is a JSON file with two main sections: `global` (general 
 | `check_interval_seconds` | **Yes** | - | How often to check for IP changes (minimum: 60) |
 | `ip_check_url` | No | `https://ifconfig.me` | Service to detect your public IP |
 | `ttl_default` | No | `300` | Default TTL for records (in seconds) |
+| `sync_mode` | No | `additive` | `additive` or `strict` - see [Sync Modes](#sync-modes-additive-vs-strict) |
+| `strict_confirm_delete` | No | `false` | Only used with `sync_mode: strict`. Set to `true` to actually let the tool delete extra records after you've reviewed the warnings |
 
 ### Zone Settings
 
@@ -180,6 +183,8 @@ The configuration file is a JSON file with two main sections: `global` (general 
 |---------|----------|-------------|
 | `name` | **Yes** | Your domain name (e.g., `example.com`) |
 | `records` | **Yes** | List of DNS records to manage |
+| `sync_mode` | No | Overrides `global.sync_mode` for this zone only (`additive` or `strict`) - see [Sync Modes](#sync-modes-additive-vs-strict) |
+| `strict_confirm_delete` | No | Overrides `global.strict_confirm_delete` for this zone only |
 
 ### Record Settings
 
@@ -210,6 +215,65 @@ The record value is fixed and will not change. Useful for CNAME, MX, TXT records
 ```
 
 **Note:** For CNAME records pointing to external domains, include the trailing dot (e.g., `mail.google.com.`)
+
+---
+
+## Sync Modes: additive vs strict
+
+By default the tool is **additive**: it only creates/updates the records listed in your config and never touches anything else. This means you can freely add extra records by hand in the Hetzner console (e.g. a one-off record you don't want to track in the config) without the tool ever removing them.
+
+The downside of additive mode is drift: if you add a record manually in Hetzner and forget to also add it to your config, your config no longer reflects reality. **Strict mode** solves this by making the tool actively keep Hetzner in sync with your config: any record found on Hetzner that isn't in your config is treated as drift and flagged for removal.
+
+`sync_mode` and `strict_confirm_delete` can be set in `global` (as a default for every zone) **and/or overridden per zone**, since you might not want to manage every domain the same way - e.g. keep strict sync on a domain you fully control via config, while leaving a domain where you manage a bunch of records by hand in additive mode:
+
+```json
+{
+  "global": {
+    "api_token": "ENV:HETZNER_API_TOKEN",
+    "check_interval_seconds": 300,
+    "sync_mode": "additive"
+  },
+  "zones": [
+    {
+      "name": "fully-managed.com",
+      "sync_mode": "strict",
+      "strict_confirm_delete": false,
+      "records": [
+        { "name": "@", "type": "A", "mode": "dynamic-ip" }
+      ]
+    },
+    {
+      "name": "mixed-management.com",
+      "records": [
+        { "name": "@", "type": "A", "mode": "dynamic-ip" }
+      ]
+    }
+  ]
+}
+```
+
+In this example, `fully-managed.com` uses strict mode (overridden at the zone level) while `mixed-management.com` falls back to the global `additive` default. A zone's `sync_mode`/`strict_confirm_delete` always take priority over the `global` values when both are set.
+
+**Strict mode is a two-step, opt-in process so you never lose a record by accident:**
+
+1. **Set `sync_mode: strict`, leave `strict_confirm_delete: false` (the default).** On the next sync cycle, the tool logs a `WARNING` for every record it finds on Hetzner that isn't in your config - naming the record, its type, and its current value(s) - but **it does not delete anything yet**:
+
+   ```
+   [WARNING] Strict mode: 'vault' (A) in zone example.com exists on Hetzner but not in your
+   config (values: ['192.168.178.135']). It will NOT be removed automatically. Add it to
+   the config to keep it, or set global.strict_confirm_delete=true once you've reviewed
+   all such warnings to let the tool delete it.
+   ```
+
+2. **Review every warning.** For each one, either:
+   - Add the record to your config (so it becomes managed and the warning disappears), or
+   - Confirm you want it gone.
+
+3. **Once you're satisfied nothing important will be lost**, set `strict_confirm_delete: true`. From the next cycle onward, any record still flagged as an extra is deleted from Hetzner automatically, and the config is now the single source of truth for that zone.
+
+**Always protected, in every mode:** `SOA` and `NS` records are never deleted by strict mode, since removing them can break the zone's delegation/resolution entirely. If you need to manage subdomain `NS` delegation, do it manually - the tool will never touch it.
+
+**Recommendation:** run strict mode with `strict_confirm_delete: false` for at least one full cycle after switching, read the warnings in your logs (`docker logs hetzner-ddns`), and only flip `strict_confirm_delete` to `true` once the list matches what you actually expect to remove.
 
 ---
 
@@ -731,6 +795,7 @@ docker run -v ./config:/config:ro,Z hetzner-ddns
    - **New records**: Created when missing; if the API reports the RR set already exists (409), the client applies `set_records` instead
    - **CNAME rules**: If a new record would violate CNAME exclusivity (e.g. CNAME while an **A** exists on the same name), the sync skips that entry and logs guidance instead of calling create
    - **Unchanged records**: Skipped (no unnecessary API calls)
+   - **Extra records** (only in `sync_mode: strict`): records present on Hetzner but absent from the config are logged as warnings, then deleted once `strict_confirm_delete` is set to `true` - see [Sync Modes](#sync-modes-additive-vs-strict). `SOA`/`NS` are always left alone. In the default `additive` mode, extra records are never inspected or touched
 4. **Wait**: Sleeps for the configured interval
 5. **Repeat**: Goes back to step 2
 
@@ -751,6 +816,7 @@ This tool uses the [Hetzner Cloud API](https://docs.hetzner.cloud/) for DNS mana
 - `GET /zones/{zone}/rrsets` - List record sets (the client follows pagination until all pages are read)
 - `POST /zones/{zone}/rrsets` - Create new record set
 - `POST /zones/{zone}/rrsets/{name}/{type}/actions/set_records` - Update records
+- `DELETE /zones/{zone}/rrsets/{name}/{type}` - Remove a record set (only in `sync_mode: strict`, once `strict_confirm_delete` is `true`)
 
 ---
 

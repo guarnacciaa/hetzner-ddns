@@ -29,6 +29,17 @@
           "minimum": 60,
           "description": "Default TTL for DNS records (in seconds)",
           "default": 300
+        },
+        "sync_mode": {
+          "type": "string",
+          "enum": ["additive", "strict"],
+          "description": "additive: only create/update configured records, never touch anything else (lets you manage extra records manually in the Hetzner console). strict: the tool tries to make Hetzner match the config exactly, reporting (and, once confirmed, removing) records that exist on Hetzner but not in the config.",
+          "default": "additive"
+        },
+        "strict_confirm_delete": {
+          "type": "boolean",
+          "description": "Only used when sync_mode is 'strict'. While false (default), extra records found on Hetzner are only logged as warnings and never deleted. Set to true once you've reviewed the warnings to let the tool actually delete them. SOA and NS records are never deleted regardless of this setting.",
+          "default": false
         }
       }
     },
@@ -43,6 +54,15 @@
           "name": {
             "type": "string",
             "description": "Zone name (domain name, e.g., 'example.com')"
+          },
+          "sync_mode": {
+            "type": "string",
+            "enum": ["additive", "strict"],
+            "description": "Overrides global.sync_mode for this zone only. Lets you run some domains in 'strict' mode and others in 'additive' mode."
+          },
+          "strict_confirm_delete": {
+            "type": "boolean",
+            "description": "Overrides global.strict_confirm_delete for this zone only. Only relevant when this zone's effective sync_mode is 'strict'."
           },
           "records": {
             "type": "array",

@@ -4,6 +4,10 @@ from hetzner_ddns.txt_formatter import format_txt_records
 
 logger = logging.getLogger(__name__)
 
+# Never touched in strict mode: removing these can break zone delegation
+# or resolution entirely, regardless of whether the user configured them.
+PROTECTED_TYPES = {"SOA", "NS"}
+
 
 def normalize_record_type(rtype: str) -> str:
     """DNS types from the API may not match config casing (e.g. txt vs TXT)."""
@@ -48,6 +52,53 @@ def cname_label_conflict_type(existing_rrsets, zone_name, record_name, record_ty
     return None
 
 
+def handle_extra_records(api, zone_name, existing, configured_keys, confirm_delete):
+    """
+    In 'strict' sync_mode, remove RRSets that exist on Hetzner but are not
+    present in the local config, so the remote zone mirrors the config
+    exactly (the counterpart to 'additive' mode, which never touches
+    records it doesn't manage).
+
+    Records of a protected type (SOA, NS) are always left alone. Until
+    confirm_delete is enabled, extras are only reported via a warning so
+    the user can review them (add them to the config, or remove them
+    manually) before any deletion happens.
+    """
+    extras = [
+        (name, rtype, rrset)
+        for (name, rtype), rrset in existing.items()
+        if (name, rtype) not in configured_keys and rtype not in PROTECTED_TYPES
+    ]
+
+    if not extras:
+        return
+
+    if not confirm_delete:
+        for name, rtype, rrset in extras:
+            values = [rec.get("value") for rec in rrset.get("records", [])]
+            logger.warning(
+                "Strict mode: '%s' (%s) in zone %s exists on Hetzner but not in your "
+                "config (values: %s). It will NOT be removed automatically. Add it to "
+                "the config to keep it, or set global.strict_confirm_delete=true once "
+                "you've reviewed all such warnings to let the tool delete it.",
+                name, rtype, zone_name, values,
+            )
+        return
+
+    for name, rtype, rrset in extras:
+        try:
+            api.delete_rrset(zone_name, name, rtype)
+            logger.info(
+                "Strict mode: removed extra record %s (%s) in zone %s",
+                name, rtype, zone_name,
+            )
+        except Exception as e:
+            logger.error(
+                "Strict mode: failed to remove extra record %s (%s) in zone %s: %s",
+                name, rtype, zone_name, e,
+            )
+
+
 def sync_all(cfg, ip):
     """
     Synchronize all DNS records across all configured zones.
@@ -57,10 +108,17 @@ def sync_all(cfg, ip):
         ip: Current public IP address
     """
     api = HetznerCloudAPI(cfg.global_cfg["api_token"])
+    default_sync_mode = cfg.global_cfg.get("sync_mode", "additive")
+    default_confirm_delete = bool(cfg.global_cfg.get("strict_confirm_delete", False))
 
     for zone in cfg.zones:
         zone_name = zone["name"]
         logger.debug(f"Processing zone: {zone_name}")
+
+        # Each zone can override the global sync_mode/strict_confirm_delete,
+        # since not every domain needs to be managed the same way.
+        sync_mode = zone.get("sync_mode", default_sync_mode)
+        confirm_delete = bool(zone.get("strict_confirm_delete", default_confirm_delete))
 
         try:
             # Fetch existing RRSets for this zone
@@ -154,3 +212,6 @@ def sync_all(cfg, ip):
 
             except Exception as e:
                 logger.error(f"Failed to sync record {record_name} ({record_type}): {e}")
+
+        if sync_mode == "strict":
+            handle_extra_records(api, zone_name, existing, set(groups.keys()), confirm_delete)

@@ -52,6 +52,12 @@ def load_config(path):
     if not raw["global"].get("api_token"):
         raise ValueError("API token is required (global.api_token)")
 
+    sync_mode = raw["global"].get("sync_mode", "additive")
+    if sync_mode not in ("additive", "strict"):
+        raise ValueError(
+            f"Invalid global.sync_mode '{sync_mode}': must be 'additive' or 'strict'"
+        )
+
     if not raw.get("zones"):
         raise ValueError("At least one zone must be configured")
 
@@ -60,6 +66,12 @@ def load_config(path):
             raise ValueError("Each zone must have a 'name' field")
         if not zone.get("records"):
             raise ValueError(f"Zone '{zone.get('name')}' has no records configured")
+
+        if "sync_mode" in zone and zone["sync_mode"] not in ("additive", "strict"):
+            raise ValueError(
+                f"Invalid sync_mode '{zone['sync_mode']}' for zone '{zone['name']}': "
+                "must be 'additive' or 'strict'"
+            )
 
         # Validate each record
         for record in zone["records"]:
