@@ -1,0 +1,23 @@
+# Desired state Hetzner DDNS.
+# Clone: /opt/repos/hetzner-ddns
+# Runtime data: /opt/containers/hetzner-ddns/config (not in Git)
+#
+# No upstream registry image exists: the image is built from this repository.
+# Build or rebuild it before deploying after any change under src/:
+#   docker build -t hetzner-ddns:latest /opt/repos/hetzner-ddns
+
+services:
+  hetzner-ddns:
+    image: hetzner-ddns:latest
+    container_name: hetzner-ddns
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Rome
+      HETZNER_API_TOKEN: ${HETZNER_API_TOKEN}
+    volumes:
+      - /opt/containers/hetzner-ddns/config:/config:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10M"
+        max-file: "10"

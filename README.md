@@ -855,3 +855,38 @@ If you encounter issues:
 ## Keywords
 
 *For searchability: hetzner ddns, hetzner dynamic dns, hetzner dyndns, hetzner cloud dns updater, hetzner dns api, dynamic dns docker, self-hosted ddns, homelab dns, raspberry pi ddns, home server dynamic ip, hetzner api python, ddns client linux, free dynamic dns alternative, no-ip alternative, duckdns alternative, cloudflare ddns alternative for hetzner*
+
+---
+
+## Deploy in this lab (GitOps)
+
+This repository is the single source of truth for the stack: application code,
+`Dockerfile` and `compose.yml`.
+
+```bash
+# image: built from this repo, there is no registry image
+docker build -t hetzner-ddns:latest .
+
+# stack: deployed by Dockhand from compose.yml
+docker compose -f compose.yml config --quiet
+```
+
+Runtime data (not in Git, bind-mounted read-only at `/config`):
+
+- `/opt/containers/hetzner-ddns/config/config.json` — zone and record definitions.
+  `config/config.example.json` documents the schema; `config/schema.json` validates it.
+- Backups of `config.json` stay next to it on the host, never in the repository.
+
+Environment (Dockhand stack environment, not a host `.env`):
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `HETZNER_API_TOKEN` | yes | Hetzner DNS API token, secret. Rotating it does not touch the data: it only authorises API calls, records and `config.json` stay readable. |
+
+Notes:
+
+- The container publishes no ports: it is a poller that runs one sync cycle every
+  `check_interval_seconds` and exits nothing (long-running loop, logs to stdout).
+- `config.json` is read once at start: after editing zones or records, restart the container.
+- Do not put credentials, tokens, private keys, personal names or internal host/IP
+  addresses in this README or in other tracked files.
