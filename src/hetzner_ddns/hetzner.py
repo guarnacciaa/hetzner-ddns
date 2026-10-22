@@ -19,7 +19,7 @@ def _rrset_path_name(name: str) -> str:
     name = str(name)
     if name == "@":
         return name
-    return quote(name, safe="")
+    return quote(name, safe="*")  # Hetzner vuole l asterisco letterale: %2A risponde 404
 
 
 class HetznerCloudAPI:
